@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in &middot; {{.Title}}</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="centered">
+  <form class="card login" method="post" action="/login">
+    <h1>{{.Title}}</h1>
+    <p class="muted">Sign in with the admin password.</p>
+    {{if .Error}}<p class="error">That password did not match.</p>{{end}}
+    <input type="password" name="password" placeholder="Admin password" autofocus autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+  </form>
+</body>
+</html>

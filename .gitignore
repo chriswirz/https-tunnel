@@ -1,0 +1,22 @@
+# Build output
+/https-tunnel
+/https-tunnel.exe
+/https-tunnel-linux-amd64
+/dist/
+
+# Local state: the config carries an api key and the admin password hash,
+# and sessions.json is per deployment.
+/config.json
+/config*.json
+!/config.example.json
+/sessions.json
+
+# The frontend export is a build artifact, but the directory itself must exist
+# for the go:embed in main.go to resolve.
+/web/node_modules/
+/web/.next/
+/web/out/*
+!/web/out/.gitkeep
+/web/tsconfig.tsbuildinfo
+*.exe
+*.exe~

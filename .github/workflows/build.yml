@@ -1,0 +1,362 @@
+name: Build and release
+
+# Every push to the default branch and every pull request builds the frontend,
+# runs the Go checks, and cross compiles the binaries. The default branch also
+# publishes them to a rolling prerelease named after it, so the newest build is
+# always one click away; a v* tag publishes a real release with the same
+# artifacts. Both main and master are listed so the workflow keeps working
+# whichever one this repository ends up using.
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.25'
+  NODE_VERSION: '20'
+
+jobs:
+  # The Next.js export is embedded by the Go build, so it is built once here and
+  # handed to every platform build rather than rebuilt per matrix entry.
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+
+      - name: Build the static export
+        working-directory: web
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+          retention-days: 7
+          include-hidden-files: true
+
+  test:
+    name: Go checks
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt -w:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # This also validates the OpenAPI document: internal/server has tests that
+      # parse it, resolve every $ref and check the security schemes, so the
+      # check runs on a developer's machine too rather than only here.
+      - name: go test
+        run: go test -race ./...
+
+      # The examples are the documentation for the tunnelclient library, and a
+      # change to that API has to keep them compiling.
+      - name: Build the examples
+        run: go build ./examples/...
+
+
+  build:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: windows, goarch: amd64, ext: .exe }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release notes and the short sha need the history.
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-out
+          path: web/out
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          # v0.1.<build number> for a branch build, so every run of this
+          # workflow produces a distinct, increasing version, and the tag itself
+          # for a tagged release. The series lives in the VERSION file, which is
+          # the one place to bump when 0.1 becomes 0.2.
+          #
+          # The build number is padded to four digits, so versions sort the same
+          # way as strings and as numbers: v0.1.0009 comes before v0.1.0010,
+          # where v0.1.9 would sort after v0.1.10 in anything doing a plain
+          # string comparison, which is most log viewers and file listings.
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="v$(cat VERSION).$(printf '%04d' "${GITHUB_RUN_NUMBER}")"
+          fi
+          echo "building ${version}"
+          name=https-tunnel-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          go build -trimpath -ldflags "-s -w -X main.version=${version}" -o "dist/${name}" .
+          ( cd dist && sha256sum "${name}" > "${name}.sha256" )
+
+          # The examples build for every platform too, so someone embedding the
+          # library can run one without a Go toolchain.
+          for dir in examples/*/; do
+            # examples/ also holds compose files, which are not Go packages.
+            ls "$dir"*.go >/dev/null 2>&1 || continue
+            example=$(basename "$dir")
+            out="dist/examples/${example}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+            mkdir -p dist/examples
+            go build -trimpath -ldflags "-s -w" -o "$out" "./${dir%/}"
+          done
+          ls -laR dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: https-tunnel-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          retention-days: 14
+
+  # A binary that starts, serves its UI and proxies a request is worth more than
+  # one that merely compiled, so the linux build is exercised before release.
+  smoke:
+    name: Smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: https-tunnel-linux-amd64
+          path: dist
+
+      - name: Run a client and server against each other
+        run: |
+          set -euo pipefail
+          chmod +x dist/https-tunnel-linux-amd64
+
+          python3 -m http.server 18756 --bind 127.0.0.1 &
+          echo $! > target.pid
+
+          cat > ci.json <<'JSON'
+          {
+            "client": { "api_key": "ci-key", "server_url": "http://127.0.0.1:18080", "local_port": 18756 },
+            "server": {
+              "port": 18080, "addr": "127.0.0.1", "base_domain": "ci.test", "public_scheme": "http",
+              "api_keys": [{ "name": "ci", "key": "ci-key" }], "state_file": "/tmp/ci-sessions.json"
+            }
+          }
+          JSON
+
+          ./dist/https-tunnel-linux-amd64 --config ci.json > run.log 2>&1 &
+          echo $! > proxy.pid
+          for _ in $(seq 1 30); do
+            grep -q "tunnel attached" run.log && break
+            sleep 1
+          done
+          cat run.log
+
+          host=$(grep -o 'url=http://[a-z0-9]*\.ci\.test' run.log | head -1 | sed 's|url=http://||')
+          test -n "$host"
+
+          echo "== proxied request =="
+          curl -sf -H "Host: ${host}" http://127.0.0.1:18080/ -o /dev/null -w 'tunnel -> %{http_code}\n'
+
+          echo "== control plane =="
+          curl -sf http://127.0.0.1:18080/healthz
+          curl -sf http://127.0.0.1:18080/openapi.json | head -c 40; echo
+          curl -sf -o /dev/null -w 'GET /         -> %{http_code}\n' http://127.0.0.1:18080/
+          curl -sf -o /dev/null -w 'GET /swagger  -> %{http_code}\n' http://127.0.0.1:18080/swagger
+
+          echo "== admin auth =="
+          curl -sf http://127.0.0.1:18080/api/v1/auth/session; echo
+          curl -sf -c jar -X POST -d '{"username":"admin","password":"admin"}' \
+            http://127.0.0.1:18080/api/v1/auth/login; echo
+          # Renames the account and sets a password in one call, which is what
+          # first boot requires anyway. The old name must be dead afterwards.
+          curl -sf -b jar -c jar -X POST \
+            -d '{"current_password":"admin","new_username":"ci-admin","new_password":"a-longer-secret"}' \
+            http://127.0.0.1:18080/api/v1/auth/account; echo
+          curl -sf -b jar -o /dev/null -w 'GET /api/v1/sessions -> %{http_code}\n' \
+            http://127.0.0.1:18080/api/v1/sessions
+
+          echo "== the renamed account is the only one that signs in =="
+          for attempt in '{"username":"admin","password":"admin"}' \
+                         '{"username":"admin","password":"a-longer-secret"}'; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -d "$attempt" \
+              http://127.0.0.1:18080/api/v1/auth/login)
+            echo "  old name -> ${code}"
+            test "$code" = "401"
+          done
+          curl -sf -o /dev/null -w '  new name -> %{http_code}\n' -X POST \
+            -d '{"username":"ci-admin","password":"a-longer-secret"}' \
+            http://127.0.0.1:18080/api/v1/auth/login
+
+          echo "== pruning idle sessions =="
+          curl -sf -b jar -X DELETE \
+            'http://127.0.0.1:18080/api/v1/sessions?idle_for=1w' | head -c 60; echo
+          code=$(curl -s -b jar -o /dev/null -w '%{http_code}' -X DELETE \
+            'http://127.0.0.1:18080/api/v1/sessions?idle_for=nonsense')
+          echo "  a window that is not offered -> ${code}"
+          test "$code" = "400"
+
+          echo "== the example config is loadable =="
+          ./dist/https-tunnel-linux-amd64 --example-config > example.json
+          ./dist/https-tunnel-linux-amd64 --config example.json version
+
+          echo "== the embedded-dir example serves over the same server =="
+          mkdir -p site && echo '<h1>from the example</h1>' > site/index.html
+          chmod +x dist/examples/embedded-dir-linux-amd64
+          ./dist/examples/embedded-dir-linux-amd64 \
+            -server http://127.0.0.1:18080 -key ci-key -dir site \
+            -subdomain example -listing > example.log 2>&1 &
+          echo $! > example.pid
+          for _ in $(seq 1 30); do
+            grep -q "http://example.ci.test" example.log && break
+            sleep 1
+          done
+          cat example.log
+          curl -sf -H "Host: example.ci.test" http://127.0.0.1:18080/
+
+      - name: Stop
+        if: always()
+        run: |
+          for f in proxy.pid target.pid example.pid; do
+            [ -f "$f" ] && kill "$(cat $f)" 2>/dev/null || true
+          done
+
+  release:
+    name: Release
+    needs: smoke
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' ||
+       github.ref == 'refs/heads/master' ||
+       startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: https-tunnel-*
+          path: dist
+          merge-multiple: true
+
+      # GITHUB_REF_NAME is the tag on a tag push and the branch name on a branch
+      # push, so the rolling release is named after whichever branch built it and
+      # main and master cannot collide.
+      #
+      # make_latest is what decides which release /releases/latest/ and its
+      # /releases/latest/download/<asset> URLs resolve to. The policy here is
+      # that latest always means the newest commit on the default branch:
+      #
+      #   default branch  make_latest=true, and not a prerelease, because GitHub
+      #                   refuses to point "latest" at one
+      #   v* tag          a normal release, but make_latest=false, so publishing
+      #                   a version never steals "latest" from the branch build
+      #
+      # Without that second half the policy would not hold: whichever release
+      # was published most recently would win, so tagging after a merge would
+      # quietly move "latest" onto the tag.
+      #
+      # To follow the more usual convention instead, where latest means the
+      # newest released version, swap the two make_latest values and set
+      # prerelease=true on the branch build.
+      - name: Collect
+        id: collect
+        run: |
+          ls -la dist
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "name=v$(cat VERSION).$(printf '%04d' "${GITHUB_RUN_NUMBER}") ($(git rev-parse --short HEAD))" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Tags cut a normal release; the default branch keeps moving one release
+      # that is always "latest", so an install command with no version in it
+      # gets the newest build of every merge.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.collect.outputs.tag }}
+          name: ${{ steps.collect.outputs.name }}
+          prerelease: ${{ steps.collect.outputs.prerelease }}
+          make_latest: ${{ steps.collect.outputs.make_latest }}
+          draft: false
+          generate_release_notes: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          files: |
+            dist/*
+            dist/examples/*
+            nginx/tunnel.example.com.conf
+            deploy/https-tunnel.service
+            deploy/https-tunnel-client.service
+          body: |
+            Single binary: the Next.js frontend, the OpenAPI document and the
+            tunnel server and client are all inside it.
+
+            Get started:
+
+            ```
+            ./https-tunnel --example-config > config.json
+            ./https-tunnel --config config.json client
+            ```
+
+            The server's web UI first signs in with admin/admin and then asks
+            for a new password, which it hashes into config.json.

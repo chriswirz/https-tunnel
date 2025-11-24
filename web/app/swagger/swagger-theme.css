@@ -1,0 +1,382 @@
+/*
+ * Swagger UI ships a light-only stylesheet: white panels, near black text and
+ * black SVG icons, all hard coded. On a dark page that renders as a white slab
+ * with a few unreadable patches.
+ *
+ * Everything here is scoped under .swagger-ui and painted from MUI's CSS
+ * variables. The theme is configured with cssVariables and colorSchemeSelector
+ * 'media', so those variables already hold the right value for the viewer's
+ * scheme; no media query is needed and the light rendering stays close to what
+ * upstream intended.
+ *
+ * The method colors are left alone. They carry meaning, and inverting them
+ * with a filter would take the syntax highlighting with them.
+ */
+
+/* ---- text ------------------------------------------------------------- */
+
+.swagger-ui,
+.swagger-ui .info .title,
+.swagger-ui .info li,
+.swagger-ui .info p,
+.swagger-ui .info table,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui .opblock .opblock-summary-path__deprecated,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-external-docs-wrapper p,
+.swagger-ui .opblock-title_normal p,
+.swagger-ui .parameter__name,
+.swagger-ui .parameter__type,
+.swagger-ui .parameter__in,
+.swagger-ui .parameter__extension,
+.swagger-ui .parameter__deprecated,
+.swagger-ui .response-col_status,
+.swagger-ui .response-col_links,
+.swagger-ui .responses-inner h4,
+.swagger-ui .responses-inner h5,
+.swagger-ui .opblock-section-header h4,
+.swagger-ui .opblock-section-header > label,
+.swagger-ui .tab li,
+.swagger-ui label,
+.swagger-ui .model-title,
+.swagger-ui .model,
+.swagger-ui .prop-type,
+.swagger-ui .servers-title,
+.swagger-ui .servers > label,
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th,
+.swagger-ui .markdown p,
+.swagger-ui .markdown pre,
+.swagger-ui .renderedMarkdown p,
+.swagger-ui .dialog-ux .modal-ux-content h4,
+.swagger-ui .dialog-ux .modal-ux-content p,
+.swagger-ui .dialog-ux .modal-ux-header h3 {
+  color: var(--mui-palette-text-primary);
+}
+
+/*
+ * Swagger sets these with two or three classes of specificity, so matching its
+ * own selectors is the only way to win without !important.
+ */
+.swagger-ui .opblock .opblock-section-header h4,
+.swagger-ui .opblock .opblock-section-header > label,
+.swagger-ui .opblock .opblock-section-header > label span,
+.swagger-ui .opblock-description-wrapper,
+.swagger-ui .opblock-external-docs-wrapper,
+.swagger-ui .opblock-title_normal,
+.swagger-ui .opblock-body .opblock-title,
+.swagger-ui .responses-inner > div > h4,
+.swagger-ui .model .external-docs,
+.swagger-ui table.model tr.description,
+.swagger-ui table.model tr td {
+  color: var(--mui-palette-text-primary);
+}
+
+.swagger-ui table.model tr.description,
+.swagger-ui .model .external-docs,
+.swagger-ui .parameter__type,
+.swagger-ui .parameter__in,
+.swagger-ui .prop-format,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .response-col_links {
+  color: var(--mui-palette-text-secondary);
+}
+
+.swagger-ui a,
+.swagger-ui .info a,
+.swagger-ui .info a:hover {
+  color: var(--mui-palette-primary-main);
+}
+
+.swagger-ui .parameter__name.required::after,
+.swagger-ui .errors-wrapper .errors h4 {
+  color: var(--mui-palette-error-main);
+}
+
+/* Icons are black SVGs by default. */
+.swagger-ui svg:not(:root) {
+  fill: currentColor;
+}
+.swagger-ui .expand-methods svg,
+.swagger-ui .expand-operation svg,
+.swagger-ui .arrow,
+.swagger-ui .model-toggle::after {
+  fill: var(--mui-palette-text-secondary);
+}
+
+/* ---- panels ----------------------------------------------------------- */
+
+.swagger-ui .scheme-container,
+.swagger-ui .information-container,
+.swagger-ui .loading-container {
+  background: transparent;
+  box-shadow: none;
+}
+
+.swagger-ui .opblock {
+  background: var(--mui-palette-background-paper);
+  box-shadow: none;
+}
+
+/* The white bar above the parameters and responses tables. */
+.swagger-ui .opblock .opblock-section-header {
+  background: var(--mui-palette-action-hover);
+  box-shadow: none;
+}
+
+.swagger-ui .opblock-tag {
+  border-bottom-color: var(--mui-palette-divider);
+}
+.swagger-ui .opblock-tag:hover {
+  background: var(--mui-palette-action-hover);
+}
+
+.swagger-ui section.models {
+  background: var(--mui-palette-background-paper);
+  border-color: var(--mui-palette-divider);
+}
+.swagger-ui section.models .model-container,
+.swagger-ui section.models .model-container:hover,
+.swagger-ui .model-box {
+  background: var(--mui-palette-action-hover);
+}
+.swagger-ui section.models h4 {
+  border-bottom-color: var(--mui-palette-divider);
+}
+
+.swagger-ui .dialog-ux .modal-ux {
+  background: var(--mui-palette-background-paper);
+  border-color: var(--mui-palette-divider);
+}
+.swagger-ui .dialog-ux .modal-ux-header {
+  border-bottom-color: var(--mui-palette-divider);
+}
+.swagger-ui .dialog-ux .backdrop-ux {
+  background: rgb(0 0 0 / 60%);
+}
+
+.swagger-ui .errors-wrapper {
+  background: var(--mui-palette-action-hover);
+  border-color: var(--mui-palette-error-main);
+}
+
+/* ---- tables and forms -------------------------------------------------- */
+
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th,
+.swagger-ui .responses-inner .response,
+.swagger-ui .parameters-col_description {
+  border-bottom-color: var(--mui-palette-divider);
+}
+
+.swagger-ui input[type='email'],
+.swagger-ui input[type='file'],
+.swagger-ui input[type='password'],
+.swagger-ui input[type='search'],
+.swagger-ui input[type='text'],
+.swagger-ui textarea,
+.swagger-ui select {
+  background: var(--mui-palette-background-default);
+  color: var(--mui-palette-text-primary);
+  border-color: var(--mui-palette-divider);
+}
+.swagger-ui input::placeholder,
+.swagger-ui textarea::placeholder {
+  color: var(--mui-palette-text-disabled);
+}
+.swagger-ui select {
+  /* The arrow is a baked in dark SVG data URI; hide it and use the native one. */
+  background-image: none;
+  appearance: auto;
+}
+
+/* ---- code and examples ------------------------------------------------- */
+
+/*
+ * One fixed pair of colors, because a code surface reads the same either way.
+ *
+ * The doubled .swagger-ui.swagger-ui is not a typo: swagger-ui.css is loaded
+ * after this file, so matching its specificity exactly loses the cascade.
+ * Repeating the root class adds one class worth of weight and wins without
+ * reaching for !important.
+ *
+ * pre.microlight needs !important, which nothing else here does. The syntax
+ * highlighter writes its theme background into an inline style, and an inline
+ * style outranks every selector; swagger-ui-react drops the syntaxHighlight
+ * option that would have configured it. Overriding one declaration on a third
+ * party inline style is what !important is for. The token colors live on child
+ * spans and are left alone.
+ */
+.swagger-ui.swagger-ui pre.microlight {
+  background: #11141a !important;
+}
+
+.swagger-ui.swagger-ui .example,
+.swagger-ui.swagger-ui .highlight-code {
+  background: transparent;
+}
+
+.swagger-ui.swagger-ui .responses-inner pre,
+.swagger-ui.swagger-ui .body-param__example,
+.swagger-ui.swagger-ui .model-example pre,
+.swagger-ui.swagger-ui textarea.body-param__text,
+.swagger-ui.swagger-ui .curl-command .curl {
+  background: #11141a;
+  color: #e6e9ef;
+  border-color: var(--mui-palette-divider);
+}
+.swagger-ui .microlight code,
+.swagger-ui .highlight-code > .microlight code {
+  color: inherit;
+}
+.swagger-ui .copy-to-clipboard {
+  background: rgb(255 255 255 / 12%);
+}
+.swagger-ui .copy-to-clipboard button {
+  background: transparent;
+}
+
+/* ---- buttons and tabs -------------------------------------------------- */
+
+.swagger-ui .btn {
+  background: transparent;
+  border-color: var(--mui-palette-divider);
+  color: var(--mui-palette-text-primary);
+  box-shadow: none;
+}
+.swagger-ui .btn:hover {
+  background: var(--mui-palette-action-hover);
+  box-shadow: none;
+}
+.swagger-ui .btn.authorize {
+  color: var(--mui-palette-success-main);
+  border-color: var(--mui-palette-success-main);
+}
+.swagger-ui .btn.authorize svg {
+  fill: currentColor;
+}
+.swagger-ui .btn.execute {
+  background: var(--mui-palette-primary-main);
+  border-color: var(--mui-palette-primary-main);
+  color: var(--mui-palette-primary-contrastText);
+}
+.swagger-ui .btn.cancel {
+  color: var(--mui-palette-error-main);
+  border-color: var(--mui-palette-error-main);
+}
+
+.swagger-ui .tab li {
+  color: var(--mui-palette-text-secondary);
+}
+.swagger-ui .tab li.active {
+  color: var(--mui-palette-primary-main);
+}
+.swagger-ui .tab li::after {
+  background: var(--mui-palette-divider);
+}
+
+/* The method chip keeps its own color, so its label stays white in both. */
+.swagger-ui .opblock .opblock-summary-method {
+  color: #fff;
+  text-shadow: none;
+}
+
+/* Chrome this application already provides. */
+.swagger-ui .topbar {
+  display: none;
+}
+.swagger-ui .info {
+  margin: 1rem 0;
+}
+.swagger-ui .scheme-container {
+  padding: 0 0 1rem;
+}
+
+/* ---- the schemas section ----------------------------------------------- */
+
+/*
+ * Swagger 5 renders schemas with a separate component whose classes are all
+ * json-schema-2020-12*, so none of the rules above reach it. Three things go
+ * wrong there on a dark page:
+ *
+ *   the accordions and the expand buttons are bare <button> elements with no
+ *   background of their own, so the browser paints them its default grey, which
+ *   is light in light mode and a mid grey in dark mode
+ *
+ *   the titles and keyword names are hard coded near black, #505050 and
+ *   #3b4151, which is unreadable on either of those greys
+ *
+ *   the tree lines are dashed rgba(0, 0, 0, .1), which disappears entirely
+ *
+ * The doubled root class is for specificity, as above.
+ */
+.swagger-ui.swagger-ui .json-schema-2020-12-accordion,
+.swagger-ui.swagger-ui .json-schema-2020-12-expand-deep-button,
+.swagger-ui.swagger-ui .model-box-control,
+.swagger-ui.swagger-ui .models-control {
+  background: transparent;
+  border: none;
+}
+
+.swagger-ui.swagger-ui .json-schema-2020-12__title,
+.swagger-ui.swagger-ui .json-schema-2020-12-property .json-schema-2020-12__title,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__name--primary,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__value--primary,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword--const .json-schema-2020-12-json-viewer__name,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword--default .json-schema-2020-12-json-viewer__name,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword--enum .json-schema-2020-12-json-viewer__name,
+.swagger-ui.swagger-ui section.models h4,
+.swagger-ui.swagger-ui .models-control {
+  color: var(--mui-palette-text-primary);
+}
+
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword--description,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__name--secondary,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__value--secondary,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__value,
+.swagger-ui.swagger-ui .json-schema-2020-12-expand-deep-button {
+  color: var(--mui-palette-text-secondary);
+}
+
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__name--extension,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__value--extension,
+.swagger-ui.swagger-ui .json-schema-2020-12-json-viewer-extension-keyword .json-schema-2020-12-json-viewer__name {
+  color: var(--mui-palette-text-disabled);
+}
+
+/* The panel each schema sits in, and the dashed lines down its tree. */
+.swagger-ui.swagger-ui .json-schema-2020-12 {
+  background: var(--mui-palette-action-hover);
+}
+.swagger-ui.swagger-ui .json-schema-2020-12-body,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__children,
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword--$vocabulary ul {
+  border-left-color: var(--mui-palette-divider);
+}
+
+/* Required stars and the mismatch warning keep their meaning, in palette. */
+.swagger-ui.swagger-ui .json-schema-2020-12-property--required > .json-schema-2020-12:first-of-type > .json-schema-2020-12-head .json-schema-2020-12__title::after {
+  color: var(--mui-palette-error-main);
+}
+.swagger-ui.swagger-ui .json-schema-2020-12-keyword__value--warning {
+  color: var(--mui-palette-error-main);
+  border-color: var(--mui-palette-error-main);
+}
+
+/*
+ * The type labels next to each property, "object" and "string". Upstream draws
+ * them in #55a, which is a reasonable blue on white and about 3:1 on this
+ * background, so it is lifted to the palette's own light blue instead.
+ */
+.swagger-ui.swagger-ui .json-schema-2020-12__attribute,
+.swagger-ui.swagger-ui .json-schema-2020-12__attribute--primary {
+  color: var(--mui-palette-primary-light);
+}
+
+/* The accordion arrows are SVG paths filled near black. */
+.swagger-ui.swagger-ui .json-schema-2020-12-accordion__icon svg,
+.swagger-ui.swagger-ui .json-schema-2020-12-expand-deep-button svg {
+  fill: var(--mui-palette-text-secondary);
+}

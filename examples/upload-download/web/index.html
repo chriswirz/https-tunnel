@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header>
+    <h1>{{.Title}}</h1>
+    <form method="post" action="/logout"><button class="ghost" type="submit">Sign out</button></form>
+  </header>
+
+  <main>
+    <section id="drop" class="card drop">
+      <p><strong>Drop files here</strong> or <label class="link" for="picker">choose files</label>.</p>
+      <input id="picker" type="file" multiple hidden>
+      <progress id="progress" max="100" value="0" hidden></progress>
+      <p id="status" class="muted"></p>
+    </section>
+
+    <section class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" class="muted" hidden>Nothing uploaded yet.</p>
+    </section>
+  </main>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

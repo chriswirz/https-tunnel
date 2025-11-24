@@ -1,0 +1,126 @@
+{
+  // https-tunnel configuration. Both sections are optional; whatever is present and enabled is what runs.
+  // Line comments like this one are stripped before parsing, so the file stays JSON everywhere else.
+
+  "client": {
+    "enabled": true,
+
+    // Credential handed to the proxy server.
+    "api_key": "replace-me-with-a-long-random-string",
+
+    // Control plane of the proxy server.
+    "server_url": "https://tunnel.example.com",
+
+    // Left empty on first run. The client writes the issued id back here so the
+    // next run reclaims the same public URL.
+    "session_id": "",
+
+    // What to expose. At least one of local_port and local_dir is required.
+    // Both may be set, in which case the port wins and the directory is ignored,
+    // so a folder can stay configured while a local server is running.
+    //
+    // local_port proxies to a server already running here, for example an MCP
+    // server on 8756.
+    "local_port": 8756,
+    "local_host": "127.0.0.1",
+    "local_scheme": "http",
+
+    // local_dir serves a folder over the tunnel instead, with no local server
+    // involved. It takes effect when local_port is absent.
+    // "local_dir": "C:/sites/handbook",
+
+    // Size of the in memory LRU that keeps frequently requested files hot, in
+    // megabytes. Applies to local_dir only; 0 reads every request from disk.
+    // A single file may occupy at most an eighth of this, so one large asset
+    // cannot flush everything else out.
+    "cache_mb": 64,
+
+    // List a directory that has no index.html. Off by default, so a folder is
+    // not enumerated to the internet by accident.
+    "directory_listing": false,
+
+    // Ask for a specific subdomain instead of a random one: "chris" asks for
+    // https://chris.tunnel.example.com/. Granted when that label is free;
+    // if another key's session already holds it, a random label is issued as
+    // usual, so read the URL the server returns rather than assuming.
+    "subdomain_request": ""
+  },
+
+  "server": {
+    "enabled": false,
+
+    // Port to listen on. Behind nginx this is a loopback port.
+    "port": 8080,
+    "addr": "127.0.0.1",
+
+    // Control plane hostname. Tunnels are served on <label>.<base_domain>.
+    "base_domain": "tunnel.example.com",
+
+    // Fallback scheme for the URLs handed to clients. The scheme a request
+    // actually arrived over wins: X-Forwarded-Proto when trust_forwarded_headers
+    // is on, or the listener's own TLS. This value is only used when neither can
+    // say, so behind nginx it rarely matters what it is set to.
+    "public_scheme": "https",
+
+    // Accepted client credentials. A key with a subdomain pins every session it
+    // opens to that fixed label.
+    "api_keys": [
+      { "name": "chris-laptop", "key": "replace-me-with-a-long-random-string" },
+      { "name": "workstation", "key": "another-long-random-string", "subdomain": "workstation" }
+    ],
+
+    // Where session identities are persisted so clients can reconnect after a
+    // server restart.
+    "state_file": "/var/lib/https-tunnel/sessions.json",
+
+    // Drop disconnected sessions after this many idle hours. 0 keeps them forever.
+    "session_ttl_hours": 720,
+
+    // Honor X-Forwarded-For and X-Forwarded-Proto. Enable this only when nginx
+    // or another trusted proxy sits in front.
+    "trust_forwarded_headers": true,
+
+    // The single account that signs in to the web UI. Leave password_hash empty
+    // on a fresh install: the first sign in is admin/admin, and the UI then
+    // requires a new password, which the server hashes and writes back here.
+    //
+    // Both fields are written by the server when they are changed from the
+    // account page. Renaming retires the old name: once username is "crwirz",
+    // nothing signs in as "admin" again, and clearing password_hash resets the
+    // password for "crwirz" rather than bringing "admin" back.
+    "admin": {
+      "username": "admin",
+      "password_hash": "",
+      "session_hours": 12
+    },
+
+    // Serve HTTPS directly instead of plain HTTP. Leave both empty when nginx
+    // terminates TLS, which is the usual deployment.
+    //
+    // Both files must be PEM, the text format that starts with a
+    // "-----BEGIN ..." line. The extension is not checked and does not matter:
+    // .pem, .crt, .cer, .key and .txt all load if the contents are PEM. DER
+    // (binary .der or .cer) and PKCS#12 (.pfx, .p12) do NOT load, and fail at
+    // startup with "failed to find any PEM data in certificate input".
+    // Convert those first:
+    //   openssl x509 -in cert.der -inform DER -out cert.pem
+    //   openssl pkcs12 -in cert.pfx -clcerts -nokeys -out fullchain.pem
+    //   openssl pkcs12 -in cert.pfx -nocerts -nodes -out privkey.pem
+    //
+    // cert_file is the full chain: the server certificate first, then any
+    // intermediates, concatenated in one file. Serving the leaf alone will
+    // fail verification in some clients.
+    // key_file is the matching private key: PKCS#8 ("BEGIN PRIVATE KEY"),
+    // PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY"). A
+    // passphrase protected key is not supported, so decrypt it first:
+    //   openssl rsa -in encrypted.key -out privkey.pem
+    //
+    // The certificate has to cover the wildcard as well as the apex, because
+    // every tunnel is a subdomain. Letsencrypt names these fullchain.pem and
+    // privkey.pem under /etc/letsencrypt/live/<domain>/.
+    "tls": {
+      "cert_file": "",
+      "key_file": ""
+    }
+  }
+}
