@@ -1,0 +1,710 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "https-tunnel control plane",
+    "version": "1.0.0",
+    "summary": "Issues tunnel sessions and reports on them.",
+    "description": "The control plane runs on the base domain, `tunnel.example.com`. It is the\nonly host that serves this API and the web UI.\n\nEvery other host under the base domain, `<label>.tunnel.example.com`, is a\ntunnel. Those hostnames serve whatever the connected client is running locally\nand have no API of their own, so nothing in this document applies to them. A\nrequest to a tunnel hostname whose client is offline is answered by the proxy\nitself with `502` and the offline page.\n\nA client uses two endpoints. `POST /api/v1/connect` registers or resumes a\nsession and returns the public URL, then `GET /api/v1/tunnel` upgrades the\nconnection to the tunnel protocol and keeps it open. The remaining endpoints\nare for inspection and cleanup.\n",
+    "license": {
+      "name": "MIT"
+    },
+    "contact": {
+      "name": "https-tunnel",
+      "url": "/docs"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This server, whichever host is serving this document"
+    }
+  ],
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Administrator sign in for the web UI."
+    },
+    {
+      "name": "tunnel",
+      "description": "Opening and maintaining a tunnel."
+    },
+    {
+      "name": "sessions",
+      "description": "Inspecting and removing sessions."
+    },
+    {
+      "name": "meta",
+      "description": "Health and machine readable documentation."
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "tags": [
+          "auth"
+        ],
+        "security": [],
+        "summary": "Sign in as the administrator",
+        "description": "While the server has no password hash the only accepted credentials are admin/admin, and the session it returns can do nothing until the password is changed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The current sign in state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out and drop the session",
+        "responses": {
+          "204": {
+            "description": "Signed out."
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "operationId": "changePassword",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change the administrator password",
+        "description": "The new password is hashed with PBKDF2-HMAC-SHA256 and written to config.json. Every other signed in browser is dropped.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The current sign in state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The new password was rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "authSession",
+        "tags": [
+          "auth"
+        ],
+        "security": [],
+        "summary": "Report the current sign in state",
+        "responses": {
+          "200": {
+            "description": "The current sign in state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/connect": {
+      "post": {
+        "operationId": "connect",
+        "tags": [
+          "tunnel"
+        ],
+        "summary": "Register or resume a session",
+        "description": "Returns the session id and the public URL the tunnel will be served on.\nPassing a `session_id` that the same API key owns resumes that session, keeping its URL; an unknown or foreign id is ignored and a fresh session is issued instead.\nA `subdomain_request` is granted when that label is free, and otherwise silently replaced by a random one, so always read the URL from the response rather than assuming the request was met.\nCalling this repeatedly without a `session_id` creates a new session each time, so clients should persist the id they get back.\n",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRequest"
+              },
+              "examples": {
+                "fresh": {
+                  "summary": "Ask for a new session",
+                  "value": {}
+                },
+                "resume": {
+                  "summary": "Resume a known session",
+                  "value": {
+                    "session_id": "6wjulksypp3hbptpm5hqbn2davqbroyn"
+                  }
+                },
+                "request_a_name": {
+                  "summary": "Ask for a specific subdomain",
+                  "value": {
+                    "subdomain_request": "chris"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session issued or resumed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectResponse"
+                },
+                "example": {
+                  "session": "6wjulksypp3hbptpm5hqbn2davqbroyn",
+                  "url": "https://qr8xfcb946mw.tunnel.example.com"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "No subdomain could be allocated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "sessions"
+        ],
+        "summary": "List every session",
+        "description": "Sessions are returned newest first, connected and disconnected alike.",
+        "responses": {
+          "200": {
+            "description": "The current session table.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sessions"
+                  ],
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Session"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "Session id.",
+          "schema": {
+            "type": "string"
+          },
+          "example": "6wjulksypp3hbptpm5hqbn2davqbroyn"
+        }
+      ],
+      "get": {
+        "operationId": "getSession",
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Fetch one session",
+        "responses": {
+          "200": {
+            "description": "The session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteSession",
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Delete a session",
+        "description": "Frees the subdomain and disconnects the client if one is attached. The\nclient will reconnect and be issued a new session, on a new URL.\n",
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tunnel": {
+      "get": {
+        "operationId": "openTunnel",
+        "tags": [
+          "tunnel"
+        ],
+        "summary": "Upgrade to the tunnel protocol",
+        "description": "Switches the connection from HTTP to the binary `https-tunnel` protocol and\nkeeps it open for the lifetime of the client. Attaching a second tunnel to\nthe same session displaces the first, so a reconnecting client always wins\nover a socket the server has not yet noticed is dead.\n\nAfter the `101` the connection is no longer HTTP, so the framing below is\noutside what OpenAPI can describe. Each frame is a one byte type, an eight\nbyte big endian stream id, a four byte big endian payload length, then the\npayload. Stream id 0 carries hello, ping and pong; every proxied request\ngets its own id, allocated by the server, and its head, body and end frames\nall share it. Frame types: 1 hello, 2 request head, 3 request body,\n4 request end, 5 response head, 6 response body, 7 response end, 8 abort,\n9 ping, 10 pong. Head frames carry JSON, body frames carry raw bytes split\nat 1 MiB.\n",
+        "parameters": [
+          {
+            "name": "X-Tunnel-Session",
+            "in": "header",
+            "required": true,
+            "description": "Session id returned by `POST /api/v1/connect`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6wjulksypp3hbptpm5hqbn2davqbroyn"
+          },
+          {
+            "name": "Connection",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "Upgrade"
+            }
+          },
+          {
+            "name": "Upgrade",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "https-tunnel"
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Protocol switched. The server immediately sends a hello frame.",
+            "headers": {
+              "Upgrade": {
+                "schema": {
+                  "type": "string",
+                  "const": "https-tunnel"
+                }
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string",
+                  "const": "Upgrade"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Unknown session, or a session belonging to another key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "426": {
+            "description": "The request did not ask for the `https-tunnel` upgrade.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "tags": [
+          "meta"
+        ],
+        "summary": "Liveness probe",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The server is up.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "const": "ok\n"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "operationId": "openapiDocument",
+        "tags": [
+          "meta"
+        ],
+        "summary": "This document",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "`Authorization: Bearer <api key>`."
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Alternative to the bearer header; the same key either way."
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "tunnel_admin",
+        "description": "Session cookie set by /api/v1/auth/login. The web UI uses this; API clients use a key."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or unrecognised API key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "invalid api key"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No such session.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "no such session"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ConnectRequest": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "Resume this session instead of issuing a new one."
+          },
+          "client_info": {
+            "type": "string",
+            "description": "Free text recorded in the server log."
+          },
+          "subdomain_request": {
+            "type": "string",
+            "description": "A label the client would like, so \"chris\" asks for https://chris.<base domain>/. It is granted when the label is free, or when another session of the same API key holds it. A label held by a different key, or a reserved one such as www or api, is refused quietly and a random label is issued instead, so the URL in the response is the authoritative answer. Sanitised to lowercase letters, digits and hyphens, and ignored entirely when the API key pins a fixed label.",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConnectResponse": {
+        "type": "object",
+        "required": [
+          "session",
+          "url"
+        ],
+        "properties": {
+          "session": {
+            "type": "string",
+            "description": "Session id. Persist it to reclaim the same URL later."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Public URL the tunnel is served on. It is built from the session's subdomain, the server's base domain and the scheme the request arrived over, so a server behind a TLS terminating proxy reports https even though it listens on plain HTTP."
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": [
+          "session",
+          "subdomain",
+          "url",
+          "key_name",
+          "connected",
+          "created_at",
+          "last_seen",
+          "requests"
+        ],
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "subdomain": {
+            "type": "string",
+            "description": "Label the session owns under the base domain."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Public URL, derived from the subdomain and the scheme this request arrived over rather than stored."
+          },
+          "key_name": {
+            "type": "string",
+            "description": "Name of the API key that owns the session."
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether a client is attached right now."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last attach, detach or proxied request."
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Requests proxied since the session was created."
+          },
+          "remote_addr": {
+            "type": "string",
+            "description": "Address the client is connected from. Absent while offline."
+          }
+        },
+        "example": {
+          "session": "6wjulksypp3hbptpm5hqbn2davqbroyn",
+          "subdomain": "qr8xfcb946mw",
+          "url": "https://qr8xfcb946mw.tunnel.example.com",
+          "key_name": "chris-laptop",
+          "connected": true,
+          "created_at": "2026-08-23T18:52:24.361Z",
+          "last_seen": "2026-08-23T18:52:26.594Z",
+          "requests": 2,
+          "remote_addr": "203.0.113.17"
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "AuthStatus": {
+        "type": "object",
+        "required": [
+          "authenticated",
+          "must_change_password",
+          "password_unset"
+        ],
+        "properties": {
+          "authenticated": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string"
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "description": "True while this session signed in with the default password and has not chosen a new one. Nothing else is readable until it does."
+          },
+          "password_unset": {
+            "type": "boolean",
+            "description": "True while the server has no administrator password at all, so the first sign in is admin/admin."
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password"
+          }
+        }
+      },
+      "PasswordChangeRequest": {
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "format": "password"
+          },
+          "new_password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8
+          }
+        }
+      }
+    }
+  }
+}

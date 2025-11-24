@@ -1,0 +1,53 @@
+# systemd unit for the https-tunnel client, for exposing an MCP server that runs
+# on a machine you can leave running. A laptop is usually better served by
+# starting the client by hand when it is wanted.
+#
+# Install as a system service:
+#   sudo install -m 0755 https-tunnel-linux-amd64 /usr/local/bin/https-tunnel
+#   sudo install -d /etc/https-tunnel
+#   https-tunnel --example-config | sudo tee /etc/https-tunnel/client.json >/dev/null
+#   sudo $EDITOR /etc/https-tunnel/client.json   # api_key, server_url, local_port
+#   sudo install -m 0644 deploy/https-tunnel-client.service /etc/systemd/system/
+#   sudo systemctl enable --now https-tunnel-client
+#
+# Or per user, which needs no root and keeps the config in the home directory:
+#   mkdir -p ~/.config/systemd/user ~/.config/https-tunnel
+#   https-tunnel --example-config > ~/.config/https-tunnel/client.json
+#   sed 's#/etc/https-tunnel/client.json#%h/.config/https-tunnel/client.json#; /^User=/d; /^Group=/d' \
+#       deploy/https-tunnel-client.service > ~/.config/systemd/user/https-tunnel-client.service
+#   systemctl --user enable --now https-tunnel-client
+#   loginctl enable-linger "$USER"    # so it survives logout
+#
+# The client writes the issued session id back into its config file, which is
+# what keeps the public URL stable across restarts, so that file must be
+# writable by whoever runs the service.
+
+[Unit]
+Description=https-tunnel client
+Documentation=https://github.com/chriswirz/https-tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=https-tunnel
+Group=https-tunnel
+ExecStart=/usr/local/bin/https-tunnel --config /etc/https-tunnel/client.json client
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+# The session id is written back here.
+ReadWritePaths=/etc/https-tunnel
+
+[Install]
+WantedBy=multi-user.target

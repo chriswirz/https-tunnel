@@ -1,0 +1,71 @@
+# Expose a containerised HTTP service through an https-tunnel.
+#
+#   echo 'TUNNEL_API_KEY=the-key-your-admin-gave-you' > .env
+#   docker compose up -d
+#   docker compose logs tunnel     # prints the public URL
+#
+# Nothing is published to the host: the tunnel is the only route to the app.
+name: https-tunnel-expose-a-service
+
+services:
+  # The service being exposed. It publishes no ports, so nothing is listening on
+  # the host at all.
+  app:
+    image: nginx:alpine
+    restart: unless-stopped
+    configs:
+      - source: index
+        target: /usr/share/nginx/html/index.html
+
+  tunnel:
+    build:
+      dockerfile_inline: |
+        FROM alpine:3.20
+        RUN apk add --no-cache ca-certificates curl
+        # Pin a release by replacing latest/download with download/v1.2.3.
+        RUN curl -fsSL -o /usr/local/bin/https-tunnel \
+              https://github.com/chriswirz/https-tunnel/releases/latest/download/https-tunnel-linux-amd64 \
+         && chmod +x /usr/local/bin/https-tunnel
+        # The client writes its session id back into the config file, which is
+        # what keeps the public URL stable across restarts, so the file lives on
+        # a volume and is written only the first time.
+        RUN cat > /entrypoint.sh <<'SH' && chmod +x /entrypoint.sh
+        #!/bin/sh
+        set -eu
+        CONFIG=/data/config.json
+        if [ ! -f "$CONFIG" ]; then
+          cat > "$CONFIG" <<JSON
+        {
+          "client": {
+            "api_key": "${TUNNEL_API_KEY}",
+            "server_url": "${TUNNEL_SERVER_URL}",
+            "subdomain_request": "${TUNNEL_SUBDOMAIN:-}",
+            "local_host": "${TUNNEL_LOCAL_HOST}",
+            "local_port": ${TUNNEL_LOCAL_PORT}
+          }
+        }
+        JSON
+        fi
+        exec https-tunnel --config "$CONFIG" client
+        SH
+        ENTRYPOINT ["/entrypoint.sh"]
+    depends_on: [app]
+    restart: unless-stopped
+    environment:
+      TUNNEL_SERVER_URL: https://tunnel.example.com
+      TUNNEL_API_KEY: ${TUNNEL_API_KEY:?set TUNNEL_API_KEY in .env}
+      TUNNEL_SUBDOMAIN: ${TUNNEL_SUBDOMAIN:-}
+      # The service to expose is another container, so this is its name on the
+      # compose network, not 127.0.0.1.
+      TUNNEL_LOCAL_HOST: app
+      TUNNEL_LOCAL_PORT: "80"
+    volumes:
+      - tunnel-data:/data
+
+configs:
+  index:
+    content: |
+      <h1>served through https-tunnel</h1>
+
+volumes:
+  tunnel-data:
